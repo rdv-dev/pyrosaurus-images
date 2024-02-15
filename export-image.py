@@ -28,7 +28,7 @@ def create_image(width, height, imageData, palette):
 if __name__ == "__main__":
     f = open('CELS3', 'rb')
 
-    # f.seek(0xA4E03) # dino fire - Species setup page
+    f.seek(0xA4E03) # dino fire - Species setup page
     # f.seek(0x95886) # searching dinos
     # f.seek(0x878c8) # biped vs snake / decisions
     # f.seek(0x755dd) # heard something / species main page
@@ -38,7 +38,6 @@ if __name__ == "__main__":
     # f.seek(0x2e534) # dino chomp
     # f.seek(0xea21) # dinos moving
     # f.seek(0xb6843) # dinos calling
-    f.seek(0xde00) # dinos calling
     paletteLen = 0
     paletteData = []
 
@@ -111,8 +110,6 @@ if __name__ == "__main__":
             numColors = (pyroImageData[i] & 0xF) + 16
             i = i + 1
             fillColor = pyroImageData[i]
-            if numColors == 0:
-                numColors = 3
             # print(f'Fill {numColors} pixels | orig {(pyroImageData[i-1] & 0xF)}')
             for ix in range(numColors):
                 imageData[x][y] = fillColor
@@ -181,7 +178,7 @@ if __name__ == "__main__":
 
     try:
         generated_image = create_image(image_width, image_height, imageData, paletteData)
-        generated_image.save(sys.argv[1] + ".png")
+        generated_image.save(sys.argv[1])
         print(f"Image created successfully! Saved as '{sys.argv[1]}.png'")
     except ValueError as e:
         print(f"Error: {e}")
