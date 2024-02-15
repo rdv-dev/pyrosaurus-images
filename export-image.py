@@ -1,5 +1,6 @@
 from PIL import Image
 import struct
+import sys
 
 # A4E05
 # A4F22
@@ -13,24 +14,13 @@ def create_image(width, height, imageData, palette):
     # Create a new blank image with the specified dimensions
     image = Image.new("RGB", (width, height))
 
-    # Validate that the color array has enough colors for each pixel
-    # num_pixels = width * height
-    # if len(color_array) < num_pixels:
-        # raise ValueError(f"Color array must have at least {num_pixels} colors.")
-
     paletteLen = len(palette)
 
     # Iterate through each pixel and assign the corresponding color
     for y in range(height):
         for x in range(width):
-            # pixel_index = y * width + x
-            # color = palette[colorId]
-            # colorIndex = imageData[x][y] % paletteLen
             colorIndex = imageData[x][y] - 0x10
-            c = palette[colorIndex]
-            c = (min(int(c[0]*4), 255),min(int(c[1] * 4), 255),min(int(c[2]*4), 255))
-            # print(f'color index: {colorIndex}')
-            image.putpixel((x, y), c)
+            image.putpixel((x, y), palette[colorIndex])
 
     return image
 
@@ -38,7 +28,17 @@ def create_image(width, height, imageData, palette):
 if __name__ == "__main__":
     f = open('CELS3', 'rb')
 
-    f.seek(0xA4E03)
+    # f.seek(0xA4E03) # dino fire - Species setup page
+    # f.seek(0x95886) # searching dinos
+    # f.seek(0x878c8) # biped vs snake / decisions
+    # f.seek(0x755dd) # heard something / species main page
+    # f.seek(0x62932) # dino celebration
+    # f.seek(0x50297) # dino say hi
+    # f.seek(0x406fe) # dino pounce
+    # f.seek(0x2e534) # dino chomp
+    # f.seek(0xea21) # dinos moving
+    # f.seek(0xb6843) # dinos calling
+    f.seek(0xde00) # dinos calling
     paletteLen = 0
     paletteData = []
 
@@ -49,26 +49,22 @@ if __name__ == "__main__":
         r = struct.unpack("b",f.read(1))[0]
         g = struct.unpack("b",f.read(1))[0]
         b = struct.unpack("b",f.read(1))[0]
-        paletteData.append((r,g,b))
+        # color correction performed here, making it brighter by multiplying across all channels
+        paletteData.append((min(int(r*4),255),min(int(g*4),255),min(int(b*4),255)))
 
     for x in range(256 - paletteLen):
         paletteData.append((0,0,0))
 
-    paletteSample = []
-    paletteSample.append(range(64))
-    paletteSample.append(range(64,128))
-    paletteSample.append(range(128,192))
-    paletteSample.append(range(192,256))
-
-    generated_image = create_image(4, 64, paletteSample, paletteData)
-    generated_image.save("palette.png")
-
     img1Offset = struct.unpack("<i",f.read(4))[0]
+    img2Offset = struct.unpack("<i",f.read(4))[0]
+    img3Offset = struct.unpack("<i",f.read(4))[0]
+    img4Offset = struct.unpack("<i",f.read(4))[0]
+    img5Offset = struct.unpack("<i",f.read(4))[0]
 
-    # print(img1Offset)
+    # print(img4Offset)
     f.seek(img1Offset)
 
-    bytesToRead = struct.unpack("b",f.read(1))[0]
+    bytesToRead = f.read(1)
     if bytesToRead == 0:
         print('bypassing, read value 0')
 
@@ -101,6 +97,16 @@ if __name__ == "__main__":
                 imageData[x][y] = pyroImageData[i+ix]
                 y = y + 1
             i = i + (numColors)
+        elif pyroImageData[i] & 0xF0 == 0xE0:
+            numColors = (pyroImageData[i] & 0xF) + 32
+            i = i + 1
+            fillColor = pyroImageData[i]
+            # print(f'Fill {numColors} pixels | orig {(pyroImageData[i-1] & 0xF)}')
+            for ix in range(numColors):
+                imageData[x][y] = fillColor
+                # imageData[x][y] = 0
+                y = y + 1
+            i = i + 1
         elif pyroImageData[i] & 0xF0 == 0xD0:
             numColors = (pyroImageData[i] & 0xF) + 16
             i = i + 1
@@ -150,11 +156,22 @@ if __name__ == "__main__":
                 # imageData[x][y] = 0
                 y = y + 1
             i = i + (numColors)
+        elif pyroImageData[i] & 0xF0 == 0x00:
+            numColors = pyroImageData[i] & 0xF
+            # print(f'Draw {numColors} pixels')
+            for ix in range(numColors):
+                imageData[x][y] = pyroImageData[-1]
+                # imageData[x][y] = 0
+                y = y + 1
+            i = i + 1
         elif pyroImageData[i] & 0xF0 == 0x40:
             # print(f'40 advance to next line {img1Offset+7+i} y: {y}')
             y = 0
             x = x + 1
             i = i + 1
+        elif pyroImageData[i] & 0xF0 == 0x10:
+            print("skip this image")
+            break;
         else:
             print (f'control error! {x}, {y}, {i} < {len(pyroImageData)} | {img1Offset + 7 + i}')
             exit()
@@ -164,7 +181,7 @@ if __name__ == "__main__":
 
     try:
         generated_image = create_image(image_width, image_height, imageData, paletteData)
-        generated_image.save("output_image.png")
-        print("Image created successfully! Saved as 'output_image.png'")
+        generated_image.save(sys.argv[1] + ".png")
+        print(f"Image created successfully! Saved as '{sys.argv[1]}.png'")
     except ValueError as e:
         print(f"Error: {e}")
